@@ -1,56 +1,55 @@
-# Diffusion Probabilistic Models
+# Diffusion Models
+This is an easy-to-understand implementation of diffusion models within 100 lines of code. Different from other implementations, this code doesn't use the lower-bound formulation for sampling and strictly follows Algorithm 1 from the [DDPM](https://arxiv.org/pdf/2006.11239.pdf) paper, which makes it extremely short and easy to follow. There are two implementations: `conditional` and `unconditional`. Furthermore, the conditional code also implements Classifier-Free-Guidance (CFG) and Exponential-Moving-Average (EMA). Below you can find two explanation videos for the theory behind diffusion models and the implementation.
 
-This repository provides a reference implementation of the method described in the paper:<br>
-> Deep Unsupervised Learning using Nonequilibrium Thermodynamics<br>
-> Jascha Sohl-Dickstein, Eric A. Weiss, Niru Maheswaranathan, Surya Ganguli<br>
-> International Conference on Machine Learning, 2015<br>
-> http://arxiv.org/abs/1503.03585
+<a href="https://www.youtube.com/watch?v=HoKDTa5jHvg">
+   <img alt="Qries" src="https://user-images.githubusercontent.com/61938694/191407922-f613759e-4bea-4ac9-9135-d053a6312421.jpg"
+   width="300">
+</a>
 
-This implementation builds a generative model of data by training a Gaussian diffusion process to transform a noise distribution into a data distribution in a fixed number of time steps.
-The mean and covariance of the diffusion process are parameterized using deep supervised learning.
-The resulting model is tractable to train,
-easy to exactly sample from,
-allows the probability of datapoints to be cheaply evaluated,
-and allows straightforward computation of conditional and posterior distributions.
+<a href="https://www.youtube.com/watch?v=TBCRlnwJtZU">
+   <img alt="Qries" src="https://user-images.githubusercontent.com/61938694/191407849-6d0376c7-05b2-43cd-a75c-1280b0e33af1.png"
+   width="300">
+</a>
 
-## Using the Software
+<hr>
 
-In order to train a diffusion probabilistic model on the default dataset of MNIST, install dependencies (see below), and then run
-``python train.py``.
+## Train a Diffusion Model on your own data:
+### Unconditional Training
+1. (optional) Configure Hyperparameters in ```ddpm.py```
+2. Set path to dataset in ```ddpm.py```
+3. ```python ddpm.py```
 
-### Dependencies
+### Conditional Training
+1. (optional) Configure Hyperparameters in ```ddpm_conditional.py```
+2. Set path to dataset in ```ddpm_conditional.py```
+3. ```python ddpm_conditional.py```
 
-1. Install `Blocks` and its dependencies following [these instructions](http://blocks.readthedocs.org/en/latest/setup.html)
-2. Setup `Fuel` and download MNIST following [these instructions](https://github.com/mila-udem/fuel/blob/master/docs/built_in_datasets.rst).
+## Sampling
+The following examples show how to sample images using the models trained in the video on the [Landscape Dataset](https://www.kaggle.com/datasets/arnaud58/landscape-pictures). You can download the checkpoints for the models [here](https://drive.google.com/drive/folders/1beUSI-edO98i6J9pDR67BKGCfkzUL5DX?usp=sharing).
+### Unconditional Model
+```python
+    device = "cuda"
+    model = UNet().to(device)
+    ckpt = torch.load("unconditional_ckpt.pt")
+    model.load_state_dict(ckpt)
+    diffusion = Diffusion(img_size=64, device=device)
+    x = diffusion.sample(model, n=16)
+    plot_images(x)
+```
 
-As of October 16, 2015 this code requires the bleeding edge, rather than stable, versions of both Blocks and Fuel. (thanks to David Hofmann for pointing out that the stable release will not work due to an interface change)
+### Conditional Model
+This model was trained on [CIFAR-10 64x64](https://www.kaggle.com/datasets/joaopauloschuler/cifar10-64x64-resized-via-cai-super-resolution) with 10 classes ```airplane:0, auto:1, bird:2, cat:3, deer:4, dog:5, frog:6, horse:7, ship:8, truck:9```
+```python
+    n = 10
+    device = "cuda"
+    model = UNet_conditional(num_classes=10).to(device)
+    ckpt = torch.load("conditional_ema_ckpt.pt")
+    model.load_state_dict(ckpt)
+    diffusion = Diffusion(img_size=64, device=device)
+    y = torch.Tensor([6] * n).long().to(device)
+    x = diffusion.sample(model, n, y, cfg_scale=3)
+    plot_images(x)
+```
+<hr>
 
-
-### Output
-
-The objective function being minimized is the bound on the negative log likelihood in bits per pixel, minus the negative log likelihood under an identity-covariance Gaussian model. That is, it is the negative of the number in the rightmost column in Table 1 in the paper.
-
-Logging information is printed to the console once per training epoch, including the current value of the objective on the training set.
-
-Figures showing samples from the model, parameters, gradients, and training progress are also output periodically (every 25 epochs by default -- see ``train.py``).
-
-The samples from the model are of three types -- standard samples, samples inpainting the left half of masked images, and samples denoising images with Gaussian noise added (by default, the signal-to-noise ratio is 1). This demonstrates the straightforward way in which inpainting, denoising, and sampling from a posterior in general can be performed using this framework.
-
-Here are samples generated by this code after 825 training epochs on MNIST, trained using the command `run train.py`:<br>
-<img src="https://github.com/Sohl-Dickstein/Diffusion-Probabilistic-Models/blob/master/samples-_t0000_epoch0825.png" width="500">
-
-Here are samples generated by this code after 1700 training epochs on CIFAR-10, trained using the command `run train.py --batch-size 200 --dataset CIFAR10 --model-args "n_hidden_dense_lower=1000,n_hidden_dense_lower_output=5,n_hidden_conv=100,n_layers_conv=6,n_layers_dense_lower=6,n_layers_dense_upper=4,n_hidden_dense_upper=100"`:<br>
-<img src="https://github.com/Sohl-Dickstein/Diffusion-Probabilistic-Models/blob/master/samples-_t0000_epoch1700.png" width="500">
-
-
-## Miscellaneous
-
-**Different nonlinearities** - In the paper, we used softplus units in the convolutional layers, and tanh units in the dense layers.
-In this implementation, I use leaky ReLU units everywhere.
-
-**Original source code** - This repository is a refactoring of the code used to run the experiments in the published paper.
-In the spirit of reproducibility, if you email me a request I am willing to share the original source code.
-It is poorly commented and held together with duct tape though.
-For most applications, you will be better off using the reference implementation provided here.
-
-**Contact** - I would love to hear from you. Let me know what goes right/wrong! <jaschasd@google.com>
+A more advanced version of this code can be found [here](https://github.com/tcapelle/Diffusion-Models-pytorch) by [@tcapelle](https://github.com/tcapelle). It introduces better logging, faster & more efficient training and other nice features and is also being followed by a nice [write-up](https://wandb.ai/capecape/train_sd/reports/Training-a-Conditional-Diffusion-model-from-scratch--VmlldzoyODMxNjE3).
